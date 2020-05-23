@@ -1,0 +1,16 @@
+[
+{
+  "modid": "AntiToxicityMod",
+  "name": "The AntiToxicity Mod",
+  "description": "A mod designed to block unwanted chat messages with ease",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["Slackow"],
+  "credits": "Slackow",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]

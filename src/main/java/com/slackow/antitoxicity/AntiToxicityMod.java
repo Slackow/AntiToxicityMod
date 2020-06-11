@@ -43,22 +43,46 @@ public class AntiToxicityMod {
     public static final String MODID = "AntiToxicityMod";
     public static final String VERSION = "1.0";
 
-    private static final String dataLocation = "antitoxicity/data.json";
+    private static final Path dataDirLocation = Paths.get("antitoxicity");
+    public static final String SUFFIX = "-list.txt";
 
     private final List<MessageBlockRule> messageBlockRules = new ArrayList<>();
     private final List<MessageBlockRule> exceptionRules = new ArrayList<>();
+    private static final Map<String, String> listMap = new HashMap<>();
     private boolean isEnabled = true;
 
     private ClientChatReceivedEvent lastEvent;
 
+    private String cut(String str) {
+        return str.substring(0, str.length() - SUFFIX.length());
+    }
+
     private void load() {
-        Path path = Paths.get(dataLocation);
-        if (Files.exists(path)) {
+        Path dataPath = dataDirLocation.resolve("data.json");
+        if (Files.isDirectory(dataDirLocation)) {
+            listMap.clear();
+            try {
+                Files.list(dataDirLocation)
+                        .filter(path -> path.toString().endsWith(SUFFIX)).forEach(path -> {
+                    try {
+                        listMap.put(cut(path.getFileName().toString()), "(?:" + Files.lines(path).collect(Collectors.joining("|")) + ")");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+
+
+        if (Files.exists(dataPath)) {
             JsonParser parser = new JsonParser();
 
             JsonElement parse;
             try {
-                parse = parser.parse(Files.lines(path).collect(Collectors.joining("\n")));
+                parse = parser.parse(Files.lines(dataPath).collect(Collectors.joining("\n")));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -248,7 +272,7 @@ public class AntiToxicityMod {
                     case "log":
                         if (lastEvent != null) {
                             try {
-                                Path path = Paths.get(dataLocation).resolveSibling("log.txt");
+                                Path path = dataDirLocation.resolve("log.txt");
                                 Files.write(path,
                                         Arrays.asList(LocalDateTime.now().toString(),
                                                 removeColorCodes(lastEvent.message.getUnformattedText())),
@@ -267,7 +291,7 @@ public class AntiToxicityMod {
                         break;
                     case "dir":
                         try {
-                            Desktop.getDesktop().open(new File(dataLocation).getParentFile());
+                            Desktop.getDesktop().open(dataDirLocation.toFile());
                             sender.addChatMessage(new ChatComponentText(GREEN + "Opened Directory"));
                         } catch (IOException e) {
                             sender.addChatMessage(new ChatComponentText(RED + "Problem with saving"));
@@ -335,13 +359,13 @@ public class AntiToxicityMod {
 
         json.addProperty("toggled", isEnabled);
 
-        File file = new File(dataLocation);
-        if (!file.getParentFile().isDirectory()) {
+        File file = dataDirLocation.toFile();
+        if (!file.isDirectory()) {
             //noinspection ResultOfMethodCallIgnored
-            file.getParentFile().mkdirs();
+            file.mkdirs();
         }
 
-        try (Writer writer = new FileWriter(file)) {
+        try (Writer writer = Files.newBufferedWriter(dataDirLocation.resolve("data.json"))) {
             Gson gson = new GsonBuilder().setPrettyPrinting().create();
             gson.toJson(json, writer);
         } catch (IOException e) {
@@ -435,8 +459,15 @@ public class AntiToxicityMod {
             if (isLiteral) {
                 patternLiteral = Pattern.quote(patternLiteral);
             }
-            this.id = id;
             this.patternLiteral = patternLiteral;
+            if (!listMap.isEmpty()) {
+                for (Map.Entry<String, String> entry : listMap.entrySet()) {
+                    String key = entry.getKey();
+                    String value = entry.getValue();
+                    patternLiteral = patternLiteral.replace("[" + key + "]", value);
+                }
+            }
+            this.id = id;
             this.isCaseInsensitive = isCaseInsensitive;
             if (message != null)
                 this.message = translateColorCodes(message);
@@ -459,7 +490,7 @@ public class AntiToxicityMod {
             StringBuilder sb = new StringBuilder();
             sb.append(id);
             sb.append(": /");
-            sb.append(pattern);
+            sb.append(patternLiteral);
             sb.append(isCaseInsensitive ? "/i" : "/");
             if (!StringUtils.isNullOrEmpty(message)) {
                 sb.append(" - \"");

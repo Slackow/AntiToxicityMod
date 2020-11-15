@@ -17,15 +17,14 @@ import org.apache.commons.lang3.text.WordUtils;
 
 import java.awt.*;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.function.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -41,7 +40,7 @@ import static net.minecraft.util.EnumChatFormatting.*;
 @Mod(modid = AntiToxicityMod.MODID, version = AntiToxicityMod.VERSION, clientSideOnly = true)
 public class AntiToxicityMod {
     public static final String MODID = "AntiToxicityMod";
-    public static final String VERSION = "1.0";
+    public static final String VERSION = "1.1";
 
     private static final Path dataDirLocation = Paths.get("antitoxicity");
     public static final String SUFFIX = "-list.txt";
@@ -57,6 +56,7 @@ public class AntiToxicityMod {
         return str.substring(0, str.length() - SUFFIX.length());
     }
 
+    @SuppressWarnings("RegExpRedundantEscape")
     private void load() {
         Path dataPath = dataDirLocation.resolve("data.json");
         if (Files.isDirectory(dataDirLocation)) {
@@ -137,14 +137,15 @@ public class AntiToxicityMod {
 
             @Override
             public String getCommandUsage(ICommandSender sender) {
-                return "/betterfilter add {id} {regex} [message] | " +
-                        "/betterfilter addexception {id} {regex} | " +
-                        "/betterfilter editmsg {id} [msg] | " +
-                        "/betterfilter remove {id} | " +
-                        "/betterfilter list | " +
-                        "/betterfilter toggle | " +
-                        "/betterfilter reload | " +
-                        "/betterfilter log | " +
+                return "/betterfilter add {id} {regex} [msg]\n" +
+                        "/betterfilter addexception {id} {regex}\n" +
+                        "/betterfilter move {id} [up|down|position]\n" +
+                        "/betterfilter editmsg {id} [msg]\n" +
+                        "/betterfilter remove {id}\n" +
+                        "/betterfilter list\n" +
+                        "/betterfilter toggle\n" +
+                        "/betterfilter reload\n" +
+                        "/betterfilter log\n" +
                         "/betterfilter dir";
             }
 
@@ -161,9 +162,7 @@ public class AntiToxicityMod {
             @Override
             public void processCommand(ICommandSender sender, String[] args) {
                 if (args.length <= 0) {
-                    for (String commandUsage : getCommandUsage(sender).split("\\s*\\|\\s*")) {
-                        sender.addChatMessage(new ChatComponentText(RED + commandUsage));
-                    }
+                    sender.addChatMessage(new ChatComponentText(getCommandUsage(sender)).setChatStyle(new ChatStyle().setColor(RED)));
                     return;
                 }
                 switch (args[0]) {
@@ -176,7 +175,7 @@ public class AntiToxicityMod {
                                 sender.addChatMessage(new ChatComponentText(RED + "You need an ID"));
                                 return;
                             }
-                            if (getRules()
+                            if (getRulesAndExceptions()
                                     .anyMatch(rule -> id.equals(rule.id))) {
                                 sender.addChatMessage(new ChatComponentText(RED + "'" + id + "' already exists"));
                                 return;
@@ -218,7 +217,7 @@ public class AntiToxicityMod {
                     case "editmsg":
                         if (args.length >= 2) {
                             String msg = translateColorCodes(Arrays.stream(args).skip(2).collect(Collectors.joining(" ")));
-                            long num = getRules()
+                            long num = getRulesAndExceptions()
                                     .filter(rule -> rule.id.equals(args[1]))
                                     .peek(rule -> {
                                         rule.message = msg;
@@ -241,6 +240,54 @@ public class AntiToxicityMod {
                                 sender.addChatMessage(new ChatComponentText(GREEN + "Removed '" + args[1] + "'"));
                             } else {
                                 sender.addChatMessage(new ChatComponentText(RED + "Did not find '" + args[1] + "'"));
+                            }
+                        } else {
+                            sender.addChatMessage(new ChatComponentText(RED + "No ID provided"));
+                        }
+                        break;
+                    case "move":
+                        if (args.length >= 2) {
+                            if (args.length >= 3) {
+                                int index = -1;
+                                boolean isException = false;
+                                for (int i = 0; i < messageBlockRules.size(); i++) {
+                                    if (messageBlockRules.get(i).id.equals(args[1])) {
+                                        index = i;
+                                        break;
+                                    }
+                                }
+                                if (index < 0) {
+                                    isException = true;
+                                    for (int i = 0; i < exceptionRules.size(); i++) {
+                                        if (exceptionRules.get(i).id.equals(args[1])) {
+                                            index = i;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (index >= 0) {
+                                    List<MessageBlockRule> rules = isException ? exceptionRules : messageBlockRules;
+                                    int otherIndex;
+                                    if ("up".equals(args[2])) {
+                                        otherIndex = (index == 0 ? rules.size() : index) - 1;
+                                    } else if ("down".equals(args[2])) {
+                                        otherIndex = (index + 1) % rules.size();
+                                    } else if (args[2].matches("[1-9]\\d*") && (otherIndex = Integer.parseInt(args[2])) <= rules.size()) {
+                                        otherIndex--;
+                                    } else {
+                                        sender.addChatMessage(new ChatComponentText(RED + "Invalid Index/Motion please use up, down, or specify a number from 1-" + rules.size()));
+                                        break;
+                                    }
+                                    Collections.swap(rules, index, otherIndex);
+                                    save();
+                                    sender.addChatMessage(new ChatComponentText(GREEN + "Succeeded in moving rule from position " + (index + 1) + " to " + (otherIndex + 1)));
+                                    processCommand(sender, new String[]{"list"});
+                                } else {
+                                    sender.addChatMessage(new ChatComponentText(RED + "Did not find '" + args[1] + "'"));
+                                }
+
+                            } else {
+                                sender.addChatMessage(new ChatComponentText(RED + "No Position provided"));
                             }
                         } else {
                             sender.addChatMessage(new ChatComponentText(RED + "No ID provided"));
@@ -294,7 +341,7 @@ public class AntiToxicityMod {
                             Desktop.getDesktop().open(dataDirLocation.toFile());
                             sender.addChatMessage(new ChatComponentText(GREEN + "Opened Directory"));
                         } catch (IOException e) {
-                            sender.addChatMessage(new ChatComponentText(RED + "Problem with saving"));
+                            sender.addChatMessage(new ChatComponentText(RED + "Problem with opening the dir"));
                         }
                         break;
                     default:
@@ -311,14 +358,15 @@ public class AntiToxicityMod {
             @Override
             public List<String> addTabCompletionOptions(ICommandSender sender, String[] args, BlockPos pos) {
                 if (args.length == 1) {
-                    return Stream.of("add", "addexception", "remove", "editmsg", "toggle", "list", "log", "reload", "dir")
+                    return Stream.of("add", "addexception", "remove", "editmsg", "toggle", "list", "move", "log", "reload", "dir")
                             .filter(suggestion -> suggestion.startsWith(args[0].toLowerCase()))
                             .collect(Collectors.toList());
                 } else if (args.length == 2) {
                     switch (args[0]) {
                         case "remove":
                         case "editmsg":
-                            return getRules()
+                        case "move":
+                            return getRulesAndExceptions()
                                     .map(rule -> rule.id)
                                     .filter(suggestion -> suggestion.toLowerCase().startsWith(args[1].toLowerCase()))
                                     .collect(Collectors.toList());
@@ -340,7 +388,7 @@ public class AntiToxicityMod {
         });
     }
 
-    private Stream<MessageBlockRule> getRules() {
+    private Stream<MessageBlockRule> getRulesAndExceptions() {
         return Stream.concat(messageBlockRules.stream(), exceptionRules.stream());
     }
 

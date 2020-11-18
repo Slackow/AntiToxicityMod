@@ -25,9 +25,9 @@ plugins {
 sourceCompatibility = targetCompatibility = 1.8
 
 version = "1.1"
-group= "com.slackow.antitoxicity" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
+group= "com.slackow.betterfilter" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
 //noinspection GroovyUnusedAssignment
-archivesBaseName = "antitoxicity"
+archivesBaseName = "betterfilter"
 
 minecraft {
     version = "1.8.9-11.15.1.2318-1.8.9"

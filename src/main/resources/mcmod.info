@@ -1,7 +1,7 @@
 [
 {
-  "modid": "AntiToxicityMod",
-  "name": "The AntiToxicity Mod",
+  "modid": "BetterFilterMod",
+  "name": "The BetterFilter Mod",
   "description": "A mod designed to block unwanted chat messages with ease",
   "version": "${version}",
   "mcversion": "${mcversion}",
